@@ -6,13 +6,11 @@ from datetime import datetime
 st.set_page_config(page_title="Suivi Bitcoin", layout="centered")
 st.title("📊 Suivi du Bitcoin")
 
-# 📅 Filtrage de période
 periode = st.selectbox(
     "Sélectionne la période à analyser :",
     ["24h", "7 jours", "15 jours", "30 jours"]
 )
 
-# Convertir la sélection en nombre de jours
 jours = {
     "24h": 1,
     "7 jours": 7,
@@ -20,7 +18,6 @@ jours = {
     "30 jours": 30
 }[periode]
 
-# 📥 Fonction de récupération de données
 @st.cache_data(ttl=86400)  # cache les données 24h (86400 secondes)
 def get_bitcoin_data(days):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
@@ -40,7 +37,6 @@ def get_bitcoin_data(days):
             st.error(f"Erreur API : {e}")
         return None
 
-# 🔁 Récupération et transformation
 data = get_bitcoin_data(jours)
 
 if data and "prices" in data:
@@ -49,10 +45,8 @@ if data and "prices" in data:
     df["date"] = pd.to_datetime(df["timestamp"], unit="ms")
     df = df[["date", "prix_eur"]]
 
-    # Complétion si besoin
     df = df.set_index("date").resample("D" if jours > 1 else "H").mean().interpolate("linear").reset_index()
 
-    # 🔢 Calcul variation en %
     prix_debut = df["prix_eur"].iloc[0]
     prix_fin = df["prix_eur"].iloc[-1]
     variation = ((prix_fin - prix_debut) / prix_debut) * 100
@@ -63,10 +57,8 @@ if data and "prices" in data:
         delta=f"{prix_fin - prix_debut:.2f} €"
     )
 
-    # 📈 Courbe
     st.line_chart(df.set_index("date"))
 
-    # 📋 Tableau
     with st.expander("📌 Voir les données brutes"):
         st.dataframe(df)
 
