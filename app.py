@@ -64,3 +64,38 @@ if data and "prices" in data:
 
 else:
     st.warning("Impossible de récupérer les données.")
+
+def send_to_supabase(df):
+    st.success(f"{len(df)} lignes prêtes à être envoyées à Supabase ✅")
+    st.code(df.tail().to_string(index=False), language='text')  # Affiche les dernières lignes simulées
+
+data = get_bitcoin_data(jours)
+
+if data and "prices" in data:
+    prices = data["prices"]
+    df = pd.DataFrame(prices, columns=["timestamp", "prix_eur"])
+    df["date"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df = df[["date", "prix_eur"]]
+
+    df = df.set_index("date").resample("D" if jours > 1 else "H").mean().interpolate("linear").reset_index()
+
+    prix_debut = df["prix_eur"].iloc[0]
+    prix_fin = df["prix_eur"].iloc[-1]
+    variation = ((prix_fin - prix_debut) / prix_debut) * 100
+
+    st.metric(
+        label=f"Variation sur {periode}",
+        value=f"{variation:.2f}%",
+        delta=f"{prix_fin - prix_debut:.2f} €"
+    )
+
+    st.line_chart(df.set_index("date"))
+
+    with st.expander("📌 Voir les données brutes"):
+        st.dataframe(df)
+
+    if st.button("📤 Envoyer vers Supabase"):
+        send_to_supabase(df)
+
+else:
+    st.warning("Impossible de récupérer les données.")
