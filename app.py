@@ -21,7 +21,7 @@ jours = {
 }[periode]
 
 # 📥 Fonction de récupération de données
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=86400)  # cache les données 24h (86400 secondes)
 def get_bitcoin_data(days):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {
@@ -33,8 +33,11 @@ def get_bitcoin_data(days):
         r = requests.get(url, params=params)
         r.raise_for_status()
         return r.json()
-    except Exception as e:
-        st.error(f"Erreur API : {e}")
+    except requests.exceptions.HTTPError as e:
+        if r.status_code == 429:
+            st.error("⏳ Trop de requêtes. Réessaye dans quelques minutes. Les données sont limitées par CoinGecko.")
+        else:
+            st.error(f"Erreur API : {e}")
         return None
 
 # 🔁 Récupération et transformation
