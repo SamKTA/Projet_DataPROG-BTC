@@ -4,16 +4,30 @@ import requests
 from datetime import datetime
 
 st.set_page_config(page_title="Suivi Bitcoin", layout="centered")
-st.title("📊 Suivi du Bitcoin - 30 derniers jours")
+st.title("📊 Suivi du Bitcoin")
 
-# ⚙️ Appel API CoinGecko
-@st.cache_data(ttl=3600)  # cache 1h
-def get_bitcoin_data():
+# 📅 Filtrage de période
+periode = st.selectbox(
+    "Sélectionne la période à analyser :",
+    ["24h", "7 jours", "15 jours", "30 jours"]
+)
+
+# Convertir la sélection en nombre de jours
+jours = {
+    "24h": 1,
+    "7 jours": 7,
+    "15 jours": 15,
+    "30 jours": 30
+}[periode]
+
+# 📥 Fonction de récupération de données
+@st.cache_data(ttl=3600)
+def get_bitcoin_data(days):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {
         'vs_currency': 'eur',
-        'days': '30',
-        'interval': 'daily'
+        'days': str(days),
+        'interval': 'daily' if days > 1 else 'hourly'
     }
     try:
         r = requests.get(url, params=params)
@@ -23,22 +37,35 @@ def get_bitcoin_data():
         st.error(f"Erreur API : {e}")
         return None
 
-# 📥 Chargement des données
-data = get_bitcoin_data()
+# 🔁 Récupération et transformation
+data = get_bitcoin_data(jours)
 
-if data is None or "prices" not in data:
-    st.stop()
+if data and "prices" in data:
+    prices = data["prices"]
+    df = pd.DataFrame(prices, columns=["timestamp", "prix_eur"])
+    df["date"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df = df[["date", "prix_eur"]]
 
-# 🔁 Mise en forme
-prices = data["prices"]
-df = pd.DataFrame(prices, columns=["timestamp", "prix_eur"])
-df["date"] = pd.to_datetime(df["timestamp"], unit="ms")
-df = df[["date", "prix_eur"]]
-df = df.set_index("date").resample("D").mean().interpolate("linear").reset_index()
+    # Complétion si besoin
+    df = df.set_index("date").resample("D" if jours > 1 else "H").mean().interpolate("linear").reset_index()
 
-# 📈 Affichage
-st.line_chart(df.set_index("date"))
+    # 🔢 Calcul variation en %
+    prix_debut = df["prix_eur"].iloc[0]
+    prix_fin = df["prix_eur"].iloc[-1]
+    variation = ((prix_fin - prix_debut) / prix_debut) * 100
 
-# 📋 Détail
-st.subheader("📌 Données brutes")
-st.dataframe(df)
+    st.metric(
+        label=f"Variation sur {periode}",
+        value=f"{variation:.2f}%",
+        delta=f"{prix_fin - prix_debut:.2f} €"
+    )
+
+    # 📈 Courbe
+    st.line_chart(df.set_index("date"))
+
+    # 📋 Tableau
+    with st.expander("📌 Voir les données brutes"):
+        st.dataframe(df)
+
+else:
+    st.warning("Impossible de récupérer les données.")
